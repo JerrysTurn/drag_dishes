@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: aruco_detector_ocv
+Description: Description of aruco_detector_ocv
+Version: 0.1.1
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: cv_bridge image_geometry geometry_msgs std_msgs roscpp rospy std_msgs tf2 tf2_ros image_transport alfons_msgs

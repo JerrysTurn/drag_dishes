@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Site BuildName="(empty)"
+	BuildStamp="20240715-0823-Experimental"
+	Name="rise-lab"
+	Generator="ctest-3.16.3"
+	CompilerName="/usr/bin/c++"
+	CompilerVersion="9.4.0"
+	OSName="Linux"
+	Hostname="rise-lab"
+	OSRelease="5.15.0-113-generic"
+	OSVersion="#123~20.04.1-Ubuntu SMP Wed Jun 12 17:33:13 UTC 2024"
+	OSPlatform="x86_64"
+	Is64Bits="1"
+	VendorString="GenuineIntel"
+	VendorID="Intel Corporation"
+	FamilyID="6"
+	ModelID="158"
+	ProcessorCacheSize="12288"
+	NumberOfLogicalCPU="8"
+	NumberOfPhysicalCPU="8"
+	TotalVirtualMemory="2047"
+	TotalPhysicalMemory="23957"
+	LogicalProcessorsPerPhysical="1"
+	ProcessorClockFrequency="1250.87"
+	>
+	<Testing>
+		<StartDateTime>Jul 15 18:01 KST</StartDateTime>
+		<StartTestTime>1721034090</StartTestTime>
+		<TestList/>
+		<EndDateTime>Jul 15 18:01 KST</EndDateTime>
+		<EndTestTime>1721034090</EndTestTime>
+		<ElapsedMinutes>0</ElapsedMinutes>
+	</Testing>
+</Site>

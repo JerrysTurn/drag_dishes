@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/rise/catkin_ws/src/aruco_detector_ocv/build/devel/setup.sh

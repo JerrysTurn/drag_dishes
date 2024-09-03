@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <arg name="use_rviz" default="True" />
+    <arg name="use_camera" default="True" />
+
+    <arg name="image_width" default="1280" />
+    <arg name="image_height" default="720" />
+    <arg name="camera" default="/rgb/image_raw" />
+    <arg name="camera_info" default="/rgb/camera_info" />
+    <arg name="tf_prefix" default="marker_id" />
+    <arg name="show_detections" default="true" />
+    <arg name="marker_size" default="0.05" doc="length of the physical marker's side in meters"/>
+    <arg name="dictionary_name" default="DICT_6X6_100" />
+    <arg name="blur_window_size" default="3" />
+    <arg name="num_detected" default="5" />
+    <arg name="min_prec_value" default="80" />
+
+    <!-- 1280x720  -->
+    <node if="$(eval arg('image_width') == 1280)" name="camera_info" pkg="rostopic" type="rostopic"
+    args="pub /camera/camera_info sensor_msgs/CameraInfo
+    '{header: {seq: 0, stamp: {secs: 0, nsecs: 0}, frame_id: 'azure_rgb_camera_link'},
+    height: 720, width: 1280, distortion_model: 'plumb_bob',
+    D: [0.083981, -0.032865, 0.000982, 0.002479, 0.0],
+    K: [627.36116, 0.0, 647.13739, 0.0, 623.48605, 375.32127, 0.0, 0.0, 1.0],
+    R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+    P: [660.85651, 0.0, 651.31854, 0.0, 0.0, 658.73468, 375.84812, 0.0, 0.0, 0.0, 1.0, 0.0],
+    binning_x: 0, binning_y: 0,
+    roi: {x_offset: 0, y_offset: 0, height: 720, width: 1280, do_rectify: false}}' -r 2"/>
+
+    <node pkg="aruco_detector_ocv" type="node" name="aruco_detector_ocv" output="screen">
+        <param name="camera" type="string" value="$(arg camera)"/>
+        <param name="camera_info" type="string" value="$(arg camera_info)"/>
+        <param name="tf_prefix" type="string" value="$(arg tf_prefix)"/>
+        <param name="show_detections" type="bool" value="$(arg show_detections)"/>
+        <param name="marker_size" type="double" value="$(arg marker_size)"/>
+        <param name="dictionary_name" type="string" value="$(arg dictionary_name)"/>
+        <param name="image_width" type="double" value="$(arg image_width)"/>
+        <param name="image_height" type="double" value="$(arg image_height)"/>
+        <param name="blur_window_size" type="double" value="$(arg blur_window_size)"/>
+        <param name="num_detected" type="double" value="$(arg num_detected)"/>
+        <param name="min_prec_value" type="double" value="$(arg min_prec_value)"/>
+    </node>
+
+    <!-- <node pkg="tf" type="static_transform_publisher" name="C_T_EE" args="0.0756141 0.0262 0.0455793 1.57079632679 -0.03 0.05 fr_right_ee azure_rgb_camera_link 100" />
+    <node pkg="tf" type="static_transform_publisher" name="EE_T_RB" args="0.1429862590784151 -0.31423748150049174 0.47389312416007 -1.529 -0.487 3.084 fr_right_base fr_right_ee 100" />
+    <node pkg="tf" type="static_transform_publisher" name="RB_T_O" args="-0.55 -0.225 0.01 1.57079632679 0.0 0.0 origin fr_right_base 100" />
+    <node pkg="tf" type="static_transform_publisher" name="O_T_LB" args=" 0.65  0.0 0.01 0.0 3.14159265 3.14159265 fr_left_base origin 100" /> -->
+
+    <group if="$(arg use_rviz)" >
+        <node pkg="rviz" type="rviz" name="markers_extrinsic" args="-d $(find aruco_detector_ocv)/config/aruco_opencv.rviz"/>
+    </group>    
+
+    <!-- <node pkg="aruco_detector_ocv" type="marker7.py" name="marker7" output="screen" />
+    <node pkg="aruco_detector_ocv" type="marker14.py" name="marker14" output="screen" />
+    <node pkg="aruco_detector_ocv" type="marker32.py" name="marker32" output="screen" /> -->
+</launch>

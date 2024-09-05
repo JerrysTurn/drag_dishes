@@ -7,7 +7,7 @@
 
 import numpy as np
 import copy
-from scipy.linalg import eig
+from scipy.linalg import eigh
 from utils import *
 
 # parameter for simulation
@@ -28,7 +28,7 @@ mu1 = 0.2
 mu2 = 0.8
 
 Ow  = gravity * object_weight
-Hw  = 7.0
+Hw  = 10.0
 
 c_o = 0.6
 c_h = 0.6
@@ -80,23 +80,12 @@ if flag_Simul == True:
         # A_dot denote LS at hand frame
         A_dot = G @ A @ G.T
         
-        eigen_values, eigen_vectors = eig(A_dot, B)
+        eigen_values, eigen_vectors = eigh(B, A_dot)
         lmda = np.diag(eigen_values)
         phi = eigen_vectors
 
-        # print(phi)
-        # print(lmda)
-        # print("first", phi.T)
-        # print(phi @ B @ phi )
-        # print("same?", phi.T)
-        # print(phi.T @ B @ phi)
-        # print(phi.T @ A_dot @ phi)
+        C = lmda - np.eye(3)
 
-        # print("same??")
-        # print(A_dot@phi)
-        # print(B @ phi @ lmda)
+        # show_limit_surface(eigen_values)
 
-        # print(-s*q_rel[0], -s*q_rel[1])
-        # print(get_jacobian(-s*q_rel[0], -s*q_rel[1]))
-        # print(A_cop)
-        # print(A)
+        

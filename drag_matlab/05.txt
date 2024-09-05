@@ -1,0 +1,230 @@
+%% Modeling for quasi-static analysis of planar sliding
+% Assume square object with width & length (15.6cm, 23.6cm) lie on (0,0) on general coordinate
+% Object weights 0.45kg and exerts uniform pressure on surface, friction coefficietn between
+% surface and object is 0.2. Hand exerts 4N with Hertzian pressure and circular contact area radius is 2.0cm
+% friction coefficient between object and hand is 0.8
+
+% friction limit surface parameter
+mu1         = 0.2;      mu2         = 0.8;
+Ow          = 4.4145;   Hw          = 3;
+eq_radius_o = 0.10825;  eq_radius_h = 0.03;
+c_o         = 0.6;      c_h         = 0.5;
+
+% Define a 3x3 positive definite matrix A
+A_cop = diag([mu1*(Ow + Hw) mu1*(Ow + Hw) eq_radius_o*c_o*mu1*(Ow + Hw)]);
+A_cop = inv(A_cop).^2;
+
+c_p = 0.6;      delta = 2;
+s = 1 - power(c_p*Hw/Ow + 1, -delta);
+
+% Define a 3x3 positive definite matrix B
+B = diag([mu2*Hw mu2*Hw eq_radius_h*c_h*mu2*Hw]);
+B = inv(B).^2;
+
+% Position of object & hand
+init_q_o = [0 0 0].';
+init_q_h = [-0.03 0.07 0].';
+
+q_o     = init_q_o;    q_h = init_q_h;
+q_rel   = get_rotation(-q_o(3))*(q_h - q_o);
+
+% simulation implement
+n=1;
+flag_Simul  = 1; 
+flag_Draw   = 1;
+
+start_t = 0;
+delta_t = 0.01;
+finish_t = 30;
+
+simul_q_o = init_q_o.';
+simul_q_h = init_q_h.';
+simul_q_rel = [];
+simul_q_pivot = [];
+simul_mode = [];
+
+error = 0;
+
+if(flag_Simul == 1)
+    for time = start_t:delta_t:finish_t
+        % quasi static analysis kinematics algorithm for simulation
+        % generalized eigenvalue decomposition
+        A = get_jacobian(-s*q_rel(1), -s*q_rel(2))*A_cop*get_jacobian(-s*q_rel(1), -s*q_rel(2)).';
+        G = get_rotation(q_rel(3)).' * get_jacobian(q_rel(1), q_rel(2));
+        A_dot = G*A*G.';
+        [phi_, lmda] = eig(B, A_dot);
+        C = lmda - eye(3);
+
+        % MODE selection algorithm
+        q_h_dot = [0.01 0.005 0].';
+        v_h = transpose(get_rotation(q_h(3)))*q_h_dot;
+        v_bar_h = phi_.'*v_h;
+
+        if(norm(v_h) ~= 0)
+            % sticking mode
+            if(v_bar_h.'*C*v_bar_h < 0)
+                mode = 0;
+            % slipping mode
+            elseif(v_bar_h.'*C*inv(lmda)^2*v_bar_h>= 0)
+                mode = 1;
+            % pivoting mode
+            else
+                mode = 2;
+            end
+        end
+
+        if(norm(v_h) == 0)
+            diagonal_elements = diag(C);
+            % sticking mode
+            if(all(diagonal_elements < 0))
+                mode = 0;
+            % slipping mode
+            elseif(all(diagonal_elements > 0))
+                mode = 1;
+            % pivoting mode
+            else
+                mode = 2;
+            end
+        end
+        % sticking mode
+        if(mode==0)
+            v_o = inv(G)*v_h;
+            v_rel = [0 0 0].';
+
+        % slipping mode
+        elseif(mode==1)
+            v_o = [0 0 0].';
+            v_rel = v_h;
+
+        % pivoting mode
+        else
+            % Define the equation as a function handle
+            equation = @(alpha) C(1,1) * (v_bar_h(1) / (alpha * lmda(1,1) + 1))^2 + ...
+                                C(2,2) * (v_bar_h(2) / (alpha * lmda(2,2) + 1))^2 + ...
+                                C(3,3) * (v_bar_h(3) / (alpha * lmda(3,3) + 1))^2;
+            alpha_range = [0, 1000]; 
+ 
+            % Use fzero to find the root within the defined range
+            alpha_positive = fzero(equation, alpha_range);
+
+            v_o = inv(G)*inv(eye(3) + alpha_positive*B*inv(A_dot))*v_h;
+            v_rel = v_h - G*v_o;
+        end 
+        
+        q_h_dot = get_rotation(q_h(3))*v_h;
+        q_o_dot = get_rotation(q_o(3))*v_o;
+        q_pivot = get_rotation(q_h(3))* 1/v_rel(3)*[-v_rel(2), v_rel(1), 1].';
+
+        % update
+        q_o = q_o + q_o_dot * delta_t;
+        q_h = q_h + q_h_dot * delta_t;
+        q_rel = get_rotation(-q_o(3))*(q_h - q_o);
+        
+
+        simul_q_o = [simul_q_o; q_o.'];
+        simul_q_h = [simul_q_h; q_h.'];
+        simul_q_rel = [simul_q_rel; q_rel.'];
+        simul_q_pivot = [simul_q_pivot; q_pivot.'];
+        simul_mode = [simul_mode; mode];
+        n = n+1;
+    end
+end
+
+%% simulation reulst plot
+if(flag_Draw == 1)
+    FG1 = figure('Position', [300 300 1000 600], 'Color', [1 1 1]);
+    Ax = axes('Parent', FG1);
+    hold on
+
+    [rotated_corners_x, rotated_corners_y] = get_square(simul_q_o(1, :));
+    p1 = plot(rotated_corners_x(1,:), rotated_corners_y(1,:), 'b-', 'LineWidth', 1.5);
+    % plot hand position trajectory & object position trajectory
+    plot(simul_q_o(:, 1), simul_q_o(:, 2), 'r-', 'LineWidth', 1.5);
+    plot(simul_q_h(:, 1), simul_q_h(:, 2), 'g-', 'LineWidth', 1.5);
+    axis([-0.2 0.6 -0.2 0.3]);
+    grid on
+    
+    n = 1;
+    for time = start_t:delta_t:finish_t
+        % compute object corner to plot object
+        [rotated_corners_x, rotated_corners_y] = get_square(simul_q_o(n, :));
+        
+        % plot rotated corners for object
+        set(p1, 'XData', rotated_corners_x(:), 'YData', rotated_corners_y(:))
+        drawnow
+        n = n+1;
+        time
+    end
+end
+
+%% TEST for Accurate calculation
+% wrench value comes out as expected
+% v = [0.01 0.01 0].';
+% w = -inv(A)*v / sqrt(transpose(v)*inv(A)*v);
+
+% relation between planar twists 
+% v_o = [0 0 1].';
+% v_p = G*v_o
+% Define two 3x3 positive definite matrices
+% A1 = lmda;
+% A2 = eye(3);
+A1 = B;
+A2 = A_dot;
+% Generate the parametric angles for the ellipsoids
+theta = linspace(0, 2*pi, 100);
+phi = linspace(0, pi, 50);
+
+% Create a meshgrid of these angles
+[Theta, Phi] = meshgrid(theta, phi);
+
+% Parametric equations for the unit sphere
+X = cos(Theta) .* sin(Phi);
+Y = sin(Theta) .* sin(Phi);
+Z = cos(Phi);
+
+% Stack the coordinates into a 3xN matrix
+XYZ = [X(:) Y(:) Z(:)]';
+
+% Compute the Cholesky decomposition of A
+L1 = chol(A1, 'lower');
+
+% Transform the unit sphere into the ellipsoid
+XYZ_ellipsoid1 = L1' \ XYZ;
+
+% Compute the Cholesky decomposition of A
+L2 = chol(A2, 'lower');
+
+% Transform the unit sphere into the ellipsoid
+XYZ_ellipsoid2 = L2' \ XYZ;
+
+% Reshape back to 2D arrays for plotting
+X_ellipsoid1 = reshape(XYZ_ellipsoid1(1, :), size(X));
+Y_ellipsoid1 = reshape(XYZ_ellipsoid1(2, :), size(Y));
+Z_ellipsoid1 = reshape(XYZ_ellipsoid1(3, :), size(Z));
+
+X_ellipsoid2 = reshape(XYZ_ellipsoid2(1, :), size(X));
+Y_ellipsoid2 = reshape(XYZ_ellipsoid2(2, :), size(Y));
+Z_ellipsoid2 = reshape(XYZ_ellipsoid2(3, :), size(Z));
+
+% Plot both ellipsoids
+figure;
+hold on;
+surf(X_ellipsoid1, Y_ellipsoid1, Z_ellipsoid1, 'FaceAlpha', 0.5, 'EdgeColor', 'none', 'FaceColor', 'r');
+surf(X_ellipsoid2, Y_ellipsoid2, Z_ellipsoid2, 'FaceAlpha', 0.5, 'EdgeColor', 'none', 'FaceColor', 'b');
+title('Two 3D Ellipsoids');
+% xlabel('w1');
+% ylabel('w2');
+% zlabel('w3');
+xlabel('Fx');
+ylabel('Fy');
+zlabel('Mz');
+axis equal;
+grid on;
+hold off;
+
+%% TEST
+clc
+clear all
+close all
+
+

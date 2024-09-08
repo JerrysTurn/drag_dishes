@@ -1,31 +1,29 @@
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import numpy as np
+class Config:
+    def __init__(self, config=None):
+        # 딕셔너리로 기본값 설정
+        default_config = {
+            'batch_size': 32,
+            'learning_rate': 0.001,
+            'epochs': 10,
+            'model_name': "base_model"
+        }
+        # 사용자가 전달한 설정으로 덮어쓰기
+        if config:
+            default_config.update(config)
+        
+        # 각 변수에 설정값 할당
+        self.batch_size = default_config['batch_size']
+        self.learning_rate = default_config['learning_rate']
+        self.epochs = default_config['epochs']
+        self.model_name = default_config['model_name']
+    
+    def print_config(self):
+        print(f"Batch Size: {self.batch_size}")
+        print(f"Learning Rate: {self.learning_rate}")
+        print(f"Epochs: {self.epochs}")
+        print(f"Model Name: {self.model_name}")
 
-# Example list of 3D vectors, each vector is [x, y, z]
-vectors = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]])
-
-# Extracting x, y, and z coordinates for the points
-X = vectors[:, 0]
-Y = vectors[:, 1]
-Z = vectors[:, 2]
-
-# Create a 3D plot
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-
-# Plot the points
-ax.scatter(X, Y, Z, color='b', s=50)  # 's' is the size of the points
-
-# Set labels
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_zlabel('Z')
-
-# Set the limits of the plot
-ax.set_xlim([0, 15])
-ax.set_ylim([0, 15])
-ax.set_zlim([0, 15])
-
-plt.title('3D Points in 3D Space')
-plt.show()
+# 딕셔너리로 값을 전달하여 설정 변경
+custom_config = {'batch_size': 64, 'learning_rate': 0.0005, 'model_name': 'custom_model'}
+config = Config(config=custom_config)
+config.print_config()

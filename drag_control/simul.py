@@ -10,116 +10,109 @@ import copy
 
 from numpy.linalg import inv
 from scipy.linalg import eigh
-from scipy.optimize import fsolve
 from scipy.optimize import brentq
-from scipy.optimize import bisect
 from utils import *
 
-# parameter for simulation
-deg2rad = 0.0174533
-rad2deg = 57.2958
-pi = np.pi
+class Drag_Control():
+    def __init__(self, config=None):
+        # initialize constant
+        self.deg2rad = 0.0174533
+        self.rad2deg = 57.2958
+        self.pi = np.pi
+        self.gravity = 9.80665
 
-gravity = 9.80665
-object_weight = 1.0
-
-major_axis = 0.10
-minor_axis = 0.05
-
-eq_radius_o = np.sqrt(major_axis * minor_axis)
-eq_radius_h = 0.01
-
-mu1 = 0.15
-mu2 = 0.8
-
-Ow  = gravity * object_weight
-Hw  = 2.5
-
-c_o = 0.6
-c_h = 0.6
-
-# define a 3x3 positive definite matrix A
-element = np.array([mu1*(Ow + Hw), mu1*(Ow + Hw), eq_radius_o*c_o*mu1*(Ow + Hw)])
-A_cop = np.diag(element)
-A_cop = inv(A_cop)**2
-
-# consider shift of pressure becasuse of patch
-# parameter can be changed to fit the experimental data
-c_p = 0.9642
-delta = 1.324
-s = 1 - np.power(c_p*Hw/Ow + 1, -delta)
-
-# define a 3x3 positive definite matrix B
-element = np.array([mu2*Hw, mu2*Hw, eq_radius_h*c_h*mu2*Hw])
-B = np.diag(element)
-B = inv(B)**2
-
-# position of object and hand
-init_q_o = np.array([  0.0, 0.0, 0.0]).T
-init_q_h = np.array([-0.05, 0.0, 0.0]).T
-
-q_o = copy.deepcopy(init_q_o)
-q_h = copy.deepcopy(init_q_h)
-q_rel = get_rotation(-q_o[2]) @ (q_h - q_o)
-
-# simulation implement
-n=1
-flag_Simul = 1
-flag_Draw  = 1
-
-start_t = 0.0
-delta_t = 0.01
-finish_t = 30.0
-
-time_Simul = np.arange(start_t, finish_t, delta_t)
-
-velocity_candidate = np.empty((1,3), dtype=np.float32)
-count = 0
-
-if flag_Simul == True:
-    for time in time_Simul:
-        # quasi static analysis kinematics algorithm for simulation
-        # generalized eigenvalue decomposition
-
-        # A denote LS at the object frame
-        A = get_jacobian(-s*q_rel[0], -s*q_rel[1]) @ A_cop @ get_jacobian(-s*q_rel[0], -s*q_rel[1]).T
-        G = get_rotation(q_rel[2]).T @ get_jacobian(q_rel[0], q_rel[1])
-
-        # A_dot denote LS at hand frame
-        A_dot = G @ A @ G.T
+        default_config = {
+            'object_weight': 1.0,
+            'major_axis': 0.001,
+            'minor_axis': 10,
+            'eq_radius_o': None,
+            'eq_radius_h': 0.01,
+            'mu1': 0.15,
+            'mu2': 0.8,
+            'Ow': None,
+            'Hw': 10.0,
+            'c_o': 0.6,
+            'c_h': 0.6,
+            'c_p': 0.9642,
+            'delta': 1.324,
+            'start_t': 0.0,
+            'delta_t': 0.01,
+            'finish_t': 30.0
+        }
         
-        eigen_values, eigen_vectors = eigh(B, A_dot)
-        lmda = np.diag(eigen_values)
-        phi = eigen_vectors
+        # update custom config dictionary
+        if config:
+            default_config.update(config)
+        
+        # update dependent variable
+        default_config['eq_radius_o'] = np.sqrt(default_config['major_axis'] * default_config['minor_axis'])
+        default_config['Ow'] = self.gravity * default_config['object_weight']
+        
+        self.object_weight = default_config['object_weight']
+        self.major_axis = default_config['major_axis']
+        self.minor_axis = default_config['minor_axis']
+        self.eq_radius_o = default_config['eq_radius_o']
+        self.eq_radius_h = default_config['eq_radius_h']
+        self.mu1 = default_config['mu1']
+        self.mu2 = default_config['mu2']
+        self.Ow = default_config['Ow']
+        self.Hw = default_config['Hw']
+        self.c_o = default_config['c_o']
+        self.c_h = default_config['c_h']
+        self.c_p = default_config['c_p']
+        self.delta = default_config['delta']
+        self.start_t = default_config['start_t']
+        self.delta_t = default_config['delta_t']
+        self.finish_t = default_config['finish_t']
+        self.time_Simul = np.arange(self.start_t, self.finish_t, self.delta_t)
+        self.velocity_candidate = np.empty((1,3), dtype=np.float32)
 
-        C = lmda - np.eye(3)
+        # position of object and hand
+        self.init_q_o = np.array([  0.0, 0.0, 0.0]).T
+        self.init_q_h = np.array([-0.05, 0.0, 0.0]).T
+
+        self.q_o = copy.deepcopy(self.init_q_o)
+        self.q_h = copy.deepcopy(self.init_q_h)
+        self.q_rel = get_rotation(-self.q_o[2]) @ (self.q_h - self.q_o)
+
+    def update_limit_surface_A(self):
+        # define a 3x3 positive definite matrix A
+        element = np.array([self.mu1*(self.Ow + self.Hw), self.mu1*(self.Ow + self.Hw), self.eq_radius_o*self.c_o*self.mu1*(self.Ow + self.Hw)])
+        self.A_cop = np.diag(element)
+        self.A_cop = inv(self.A_cop)**2
+
+        # consider shift of pressure becasuse of patch
+        # parameter can be changed to fit the experimental data
+        s = 1 - np.power(self.c_p*self.Hw/self.Ow + 1, -self.delta)
+        self.A = get_jacobian(-s*self.q_rel[0], -s*self.q_rel[1]) @ self.A_cop @ get_jacobian(-s*self.q_rel[0], -s*self.q_rel[1]).T
+
+    def update_limit_surface_B(self):
+        # define a 3x3 positive definite matrix B
+        element = np.array([self.mu2 * self.Hw, self.mu2 * self.Hw, self.eq_radius_h * self.c_h * self.mu2 * self.Hw])
+        self.B = np.diag(element)
+        self.B = inv(self.B)**2
+
+    def object_velocity_calculation(self, q_h_dot):
+        self.v_h = get_rotation(self.q_h[2]).T @ get_jacobian(self.q_h[0], self.q_h[1]) @ q_h_dot
+        self.v_bar_h = self.phi.T @ self.v_h
 
         # ========== MODE SELECTION ALGORITHM ==========
-        theta = np.arange(0, 2*np.pi, 2*np.pi/len(time_Simul))
-        q_h_dot = np.array([0.05 * np.cos(theta[count]), 0.05 * np.sin(theta[count]), 0.0]).T
-        count += 1
-        # q_h_dot = np.array([0.0, 0.02, 0.0]).T
-        # v_h = get_rotation(q_h[2]).T @ q_h_dot
-        v_h = get_rotation(q_h[2]).T @ get_jacobian(q_h[0], q_h[1]) @ q_h_dot
-        v_bar_h = phi.T @ v_h
-
-        if np.linalg.norm(q_h) == 0:
+        if np.linalg.norm(self.v_h) == 0:
             # sticking mode
-            if np.all((eigen_values - 1) > 0) is True:
+            if np.all((self.lmda - 1) > 0) is True:
                 mode = 0
             # slipping mode
-            elif np.all((eigen_values - 1) < 0) is True:
+            elif np.all((self.lmda - 1) < 0) is True:
                 mode = 1
             # pivoting mode
             else:
                 mode = 2
-
         else:
             # sticking mode
-            if v_bar_h.T @ C @ v_bar_h < 0:
+            if self.v_bar_h.T @ self.C @ self.v_bar_h < 0:
                 mode = 0
             # slipping mode
-            elif v_bar_h.T @ C @ inv(lmda)**2 @ v_bar_h >= 0:
+            elif self.v_bar_h.T @ self.C @ inv(self.lmda)**2 @ self.v_bar_h >= 0:
                 mode = 1
             # pivoting mode
             else:
@@ -127,7 +120,7 @@ if flag_Simul == True:
 
         # ========== VELOCITY CALCULATION ==========
         print("mode: ", mode)
-
+    
         class Equation:
             def __init__(self, v_bar_h, lmda, C):
                 self.v_bar_h = v_bar_h
@@ -138,29 +131,49 @@ if flag_Simul == True:
                 return (self.C[0,0] * (self.v_bar_h[0] / (alpha * self.lmda[0,0] + 1))**2 + \
                         self.C[1,1] * (self.v_bar_h[1] / (alpha * self.lmda[1,1] + 1))**2 + \
                         self.C[2,2] * (self.v_bar_h[2] / (alpha * self.lmda[2,2] + 1))**2)
-
+            
         # sticking mode
         if mode == 0:
-            v_o = inv(G) @ v_h
-            v_rel = np.array([0.0, 0.0, 0.0]).T
+            self.v_o = inv(self.G) @ self.v_h
+            self.v_rel = np.array([0.0, 0.0, 0.0]).T
 
         # slipping mode
         elif mode == 1:
-            v_o = np.array([0.0, 0.0, 0.0]).T
-            v_rel = v_h
+            self.v_o = np.array([0.0, 0.0, 0.0]).T
+            self.v_rel = self.v_h
 
         # pivoting mode
         else:
-            eq = Equation(v_bar_h, lmda, C)
+            eq = Equation(self.v_bar_h, self.lmda, self.C)
 
             try:
                 alpha = brentq(eq.equation, 0, 500)
+                self.v_o = inv(self.G) @ inv(np.eye(3) + alpha * self.B @ inv(self.A_dot)) @ self.v_h
             except ValueError as e:
-                print("previous velocity will be used")
+                print("previous velocity will be used") 
+        
+        self.velocity_candidate = np.vstack((self.velocity_candidate, self.v_o))
 
-            v_o = inv(G) @ inv(np.eye(3) + alpha * B @ inv(A_dot)) @ v_h
+    def run(self):
+        self.update_limit_surface_A()
+        self.update_limit_surface_B()
+        self.G = get_rotation(self.q_rel[2]).T @ get_jacobian(self.q_rel[0], self.q_rel[1])
+        self.A_dot = self.G @ self.A @ self.G.T
 
-        velocity_candidate = np.vstack((velocity_candidate, v_o))
+        # generalized eigenvalue decomposition
+        eigen_values, eigen_vectors = eigh(self.B, self.A_dot)
+        self.lmda = np.diag(eigen_values)
+        self.phi = eigen_vectors
+        self.C = self.lmda - np.eye(3)
+        
+        angles = np.arange(0, 2*np.pi, 2*np.pi/100)
+        for theta in angles:
+            q_h_dot = np.array([0.05 * np.cos(theta), 0.05 * np.sin(theta), 0.0]).T
+            self.object_velocity_calculation(q_h_dot)
+        return
 
-# show_limit_surface(eigen_values)
-show_possible_velocity(velocity_candidate)
+        
+if __name__ == '__main__':
+    drag_interface = Drag_Control()
+    drag_interface.run()
+    show_possible_velocity(drag_interface.velocity_candidate)

@@ -61,3 +61,33 @@ def show_limit_surface(eigen_values):
 
     # Show the plot
     plt.show()
+
+def show_possible_velocity(velocity_candidate):
+    # Extracting x, y, and z coordinates for the points
+    X = velocity_candidate[:, 0]
+    Y = velocity_candidate[:, 1]
+    Z = velocity_candidate[:, 2]
+
+    # Generate a list of colors using a colormap
+    num_points = len(velocity_candidate)
+    colors = plt.cm.viridis(np.linspace(0, 1, num_points))  # 'viridis' is an example colormap
+
+    # Create a 3D plot
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plot the points
+    ax.scatter(X, Y, Z, color=colors, s=5)  # 's' is the size of the points
+
+    # Set labels
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+
+    # Set the limits of the plot
+    ax.set_xlim([-0.3, 0.3])
+    ax.set_ylim([-0.3, 0.3])
+    ax.set_zlim([-0.3, 0.3])
+
+    plt.title('3D Points in 3D Space')
+    plt.show()

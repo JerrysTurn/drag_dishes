@@ -30,13 +30,13 @@ class Drag_Control():
             'mu1': 0.15,
             'mu2': 0.8,
             'Ow': None,
-            'Hw': 10.0,
+            'Hw': 30.0,
             'c_o': 0.6,
             'c_h': 0.6,
             'c_p': 0.9642,
             'delta': 1.324,
             'start_t': 0.0,
-            'delta_t': 0.01,
+            'delta_t': 0.1,
             'finish_t': 30.0
         }
         
@@ -93,11 +93,11 @@ class Drag_Control():
         self.B = inv(self.B)**2
 
     def object_velocity_calculation(self, q_h_dot):
-        self.v_h = get_rotation(self.q_h[2]).T @ get_jacobian(self.q_h[0], self.q_h[1]) @ q_h_dot
-        self.v_bar_h = self.phi.T @ self.v_h
+        v_h = get_rotation(self.q_h[2]).T @ get_jacobian(self.q_h[0], self.q_h[1]) @ q_h_dot
+        v_bar_h = self.phi.T @ v_h
 
         # ========== MODE SELECTION ALGORITHM ==========
-        if np.linalg.norm(self.v_h) == 0:
+        if np.linalg.norm(v_h) == 0:
             # sticking mode
             if np.all((self.lmda - 1) > 0) is True:
                 mode = 0
@@ -109,10 +109,10 @@ class Drag_Control():
                 mode = 2
         else:
             # sticking mode
-            if self.v_bar_h.T @ self.C @ self.v_bar_h < 0:
+            if v_bar_h.T @ self.C @ v_bar_h < 0:
                 mode = 0
             # slipping mode
-            elif self.v_bar_h.T @ self.C @ inv(self.lmda)**2 @ self.v_bar_h >= 0:
+            elif v_bar_h.T @ self.C @ inv(self.lmda)**2 @ v_bar_h >= 0:
                 mode = 1
             # pivoting mode
             else:
@@ -134,46 +134,63 @@ class Drag_Control():
             
         # sticking mode
         if mode == 0:
-            self.v_o = inv(self.G) @ self.v_h
-            self.v_rel = np.array([0.0, 0.0, 0.0]).T
+            v_o = inv(self.G) @ v_h
+            v_rel = np.array([0.0, 0.0, 0.0]).T
 
         # slipping mode
         elif mode == 1:
-            self.v_o = np.array([0.0, 0.0, 0.0]).T
-            self.v_rel = self.v_h
+            v_o = np.array([0.0, 0.0, 0.0]).T
+            v_rel = v_h
 
         # pivoting mode
         else:
-            eq = Equation(self.v_bar_h, self.lmda, self.C)
+            eq = Equation(v_bar_h, self.lmda, self.C)
 
             try:
                 alpha = brentq(eq.equation, 0, 500)
-                self.v_o = inv(self.G) @ inv(np.eye(3) + alpha * self.B @ inv(self.A_dot)) @ self.v_h
+                v_o = inv(self.G) @ inv(np.eye(3) + alpha * self.B @ inv(self.A_dot)) @ v_h
             except ValueError as e:
                 print("previous velocity will be used") 
-        
-        self.velocity_candidate = np.vstack((self.velocity_candidate, self.v_o))
 
+        q_o_dot = get_rotation(self.q_o[2]) @ v_o
+        self.velocity_candidate = np.vstack((self.velocity_candidate, q_o_dot))
+        return q_o_dot
+
+    def drag_velocity_candidate(self):
+        drag_velocity_candidate = []
+        for force in range(3,18):
+            self.Hw = force
+            self.update_limit_surface_A()
+            self.update_limit_surface_B()
+            self.G = get_rotation(self.q_rel[2]).T @ get_jacobian(self.q_rel[0], self.q_rel[1])
+            self.A_dot = self.G @ self.A @ self.G.T
+
+            # generalized eigenvalue decomposition
+            eigen_values, eigen_vectors = eigh(self.B, self.A_dot)
+            self.lmda = np.diag(eigen_values)
+            self.phi = eigen_vectors
+            self.C = self.lmda - np.eye(3)
+        
+            angles = np.arange(0, 2*np.pi, 2*np.pi/20)
+            
+            for theta in angles:
+                q_h_dot = np.array([0.05 * np.cos(theta), 0.05 * np.sin(theta), 0.0]).T
+                q_o_dot = self.object_velocity_calculation(q_h_dot)
+                drag_velocity_candidate.append([[0, 0, force], q_h_dot, q_o_dot])
+
+        return np.array(drag_velocity_candidate)
+    
     def run(self):
-        self.update_limit_surface_A()
-        self.update_limit_surface_B()
-        self.G = get_rotation(self.q_rel[2]).T @ get_jacobian(self.q_rel[0], self.q_rel[1])
-        self.A_dot = self.G @ self.A @ self.G.T
-
-        # generalized eigenvalue decomposition
-        eigen_values, eigen_vectors = eigh(self.B, self.A_dot)
-        self.lmda = np.diag(eigen_values)
-        self.phi = eigen_vectors
-        self.C = self.lmda - np.eye(3)
-        
-        angles = np.arange(0, 2*np.pi, 2*np.pi/100)
-        for theta in angles:
-            q_h_dot = np.array([0.05 * np.cos(theta), 0.05 * np.sin(theta), 0.0]).T
-            self.object_velocity_calculation(q_h_dot)
-        return
-
+        velocity_candidate = self.drag_velocity_candidate()
+        # choose velocity index
+        idx = 7
+        self.q_h = self.q_h + velocity_candidate[idx][1] * self.delta_t
+        self.q_o = self.q_o + velocity_candidate[idx][2] * self.delta_t
+        self.q_rel = get_rotation(-self.q_o[2]) @ (self.q_h - self.q_o)
         
 if __name__ == '__main__':
     drag_interface = Drag_Control()
+    
     drag_interface.run()
+
     show_possible_velocity(drag_interface.velocity_candidate)

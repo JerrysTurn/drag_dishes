@@ -9,54 +9,17 @@ from corgipath.search_space import DefaultHybridGrid, DefaultHybridNode
 from corgipath.matplot import static_draw as draw
 from corgipath.matplot import live_draw as live
 from corgipath.matplot.utils import pick_color, auto_scale
-from drag_control_server import Drag_Control
 from scipy.interpolate import CubicSpline
-from matplotlib.patches import Ellipse
 from typing import Tuple, Dict, List
 
-class StableTopContactPushServer:
-    def __init__(self, world_config, drag_config):
-        self.drag_control = Drag_Control(drag_config)
-        self.hybrid_planner = HybridAstarDragPlanner(world_config)
-        self.local_planner = DWALocalPlanner()
-
-    def plot_trajectory(self, trajectory):
-        
-        fig, ax = plt.subplots()
-        ax.set_xlim(self.hybrid_planner.world_bounds[0], self.hybrid_planner.world_bounds[1])  
-        ax.set_ylim(self.hybrid_planner.world_bounds[2], self.hybrid_planner.world_bounds[3])  
-
-        line, = ax.plot([], [], 'b-', lw=1.0)  
-        ax.grid(True)
-        
-        ellipse = Ellipse((0, 0), width=self.drag_control.minor_axis, height=self.drag_control.major_axis, angle=0, color='r', fill=False)
-        ax.add_patch(ellipse)
-        
-        x_data = []
-        y_data = []
-
-        for frame in range(len(trajectory_data)):
-            current_x, current_y, current_angle = trajectory_data[frame]
-            x_data.append(current_x)
-            y_data.append(current_y)
-            line.set_data(x_data, y_data)
-
-            ellipse.set_center((current_x, current_y))
-            ellipse.angle = np.rad2deg(current_angle)  
-
-            plt.draw()
-            plt.pause(0.05)  
-
-        plt.show()
-
-class HybridAstarDragPlanner:
+class HybridAstarDragPlanner():
     def __init__(self, config=None):
 
         default_config = {
             'world_bounds': (-1.0, 1.0, -1.0, 1.0),
             'start': (0.0, 0.0, np.radians(90)),
             'goal': (0.2, 0.4, np.radians(0)),
-            'grid_size': 0.02,
+            'grid_size': 0.04,
             'theta_gap': np.radians(5),
             'max_heading_change': np.radians(10)
         }
@@ -78,7 +41,7 @@ class HybridAstarDragPlanner:
 
     def sample_bvh(self):
         bvh = BoundingVolumeHierarchy(bounds=self.world_bounds)
-        bvh.agent_collision = collision.Poly.from_box(collision.Vector(0.0, 0.0), 0.1, 0.2)
+        bvh.agent_collision = collision.Poly.from_box(collision.Vector(0.0, 0.0), 0.2, 0.1)
         return bvh
     
     def sample_grid(self, grid_size, theta_gap):
@@ -87,8 +50,9 @@ class HybridAstarDragPlanner:
         # You can use the default successor template. Or you can customize it.
         grid.use_default_successor_template(max_heading_change=self.max_heading_change, allow_backward=False)
         return grid
-            
-    def live_draw_options(self, ax):
+        
+    @staticmethod
+    def live_draw_options(ax):
         styles = {
             "focus_current_node": {
                 "color": "r",
@@ -141,8 +105,8 @@ class HybridAstarDragPlanner:
         self.planner.set_live_draw_options(self.live_draw_options(ax))
         waypoints = self.planner.solve(self.start, self.goal)
         print(waypoints)
-        
-        interpolated_path =self.interpolate_path(waypoints, waypoints_num=30)
+
+        interpolated_path =self.interpolate_path(waypoints, waypoints_num=100)
 
         color = list(pick_color(0.3, "rainbow"))
         color[3] = 0.8  # Set alpha
@@ -156,12 +120,12 @@ class HybridAstarDragPlanner:
         )
 
         # # Wait for closing the plot
-        plt.pause(2)
+        plt.pause(5)
 
-        return interpolated_path
-
+        return waypoints
+    
     @staticmethod
-    def interpolate_path(path, waypoints_num=30):
+    def interpolate_path(path, waypoints_num=100):
         path = np.array(path, dtype=np.float32)
 
         # Extract x, y, and theta columns from the motion path
@@ -191,65 +155,15 @@ class HybridAstarDragPlanner:
 
         return interpolated_path
 
-class DWALocalPlanner:
-    def __init__(self, config=None):
-
-        default_config = {
-            'delta_t': 0.1,
-            'terminal_distance': 0.005
-        }
-
-        if config:
-            default_config.update(config)
-        
-        self.delta_t = default_config['delta_t']
-        self.terminal_distance = default_config['terminal_distance']
-
-    def select_velocity(self, waypoint, object_pose, velocity_candidate):
-        
-        waypoint = np.array(waypoint)
-        if np.abs(waypoint[2] - object_pose[2]) < np.deg2rad(1):
-            filtered_velocity_candidate = velocity_candidate[velocity_candidate[:, 2] == 0]
-            for velocity in filtered_velocity_candidate:
-                waypoint        
-        else:
-            filtered_velocity_candidate = velocity_candidate
-
-    def _terminal_condition(self, waypoint, object_pose):
-        waypoint = np.array(waypoint, dtype=np.float32)
-        object_pose = np.array(object_pose, dtype=np.float32)
-
-        if np.linalg.norm(waypoint - object_pose) < self.terminal_distance:
-            return True
-        else:
-            return False
-    
 
 if __name__ == '__main__':
     
-    ##############  SIMULATION EXPERIMENT PROCESS  ##############
-    # SET GRID WORLD FOR SIMULATION 
     world_bounds = (-1.0, 1.0, -0.5, 1.0)
     start = (0.0, 0.0, np.radians(90))
     goal = (0.2, 0.4, np.radians(30))
 
     world_config = {'world_bounds': world_bounds, 'start': start, 'goal': goal, \
                     'theta_gap': np.radians(5), 'max_heading_change': np.radians(20)}
-
-    # SET FRICTION COEFFICIENT AND OTHER VALUES FOR SETTING
-    drag_config = {'delta_t': 0.1}
-
-    # CALCULATE FEASIBLE VELOCITY USING DRAG CONTROL ALGORITHM
-    drag_server = StableTopContactPushServer(world_config, drag_config)
-    trajectory_data = drag_server.hybrid_planner.plan()
-
-    drag_server.plot_trajectory(trajectory_data)
-
-    # MAKE TRAJECTORY OF DISHES USING HYBRID A STAR ALGORITHM
-        # hybrid astar algorithm will be made by other github repository 
     
-    # STORE TRAJECTORY OF DISHES AND VISUALIZE IT
-
-    #############################################################
-
-
+    hybrid_planner = HybridAstarDragPlanner(world_config)
+    hybrid_planner.plan()

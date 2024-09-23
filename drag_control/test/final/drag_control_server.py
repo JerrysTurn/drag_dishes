@@ -69,7 +69,7 @@ class Drag_Control():
 
         # position of object and hand
         self.init_q_o = np.array([  0.0, 0.0, 0.0]).T
-        self.init_q_h = np.array([-0.05, 0.0, 0.0]).T
+        self.init_q_h = np.array([  0.05, 0.0, 0.0]).T
 
         self.q_o = copy.deepcopy(self.init_q_o)
         self.q_h = copy.deepcopy(self.init_q_h)
@@ -158,7 +158,7 @@ class Drag_Control():
 
     def drag_velocity_candidate(self):
         drag_velocity_candidate = []
-        for force in range(3,18):
+        for force in range(3,13):
             self.Hw = force
             self.update_limit_surface_A()
             self.update_limit_surface_B()
@@ -171,16 +171,12 @@ class Drag_Control():
             self.phi = eigen_vectors
             self.C = self.lmda - np.eye(3)
         
-            angles = np.arange(0, 2*np.pi, 2*np.pi/20)
+            angles = np.arange(0, 2*np.pi, 2*np.pi/10)
             
             for theta in angles:
                 q_h_dot = np.array([0.05 * np.cos(theta), 0.05 * np.sin(theta), 0.0]).T
                 q_o_dot = self.object_velocity_calculation(q_h_dot)
                 drag_velocity_candidate.append([[0, 0, force], q_h_dot, q_o_dot])
-                print("======================")
-                print(force, theta)
-                print(q_h_dot, q_o_dot)
-                print("\n") 
 
         return np.array(drag_velocity_candidate)
     
@@ -194,5 +190,7 @@ class Drag_Control():
         
 if __name__ == '__main__':
     drag_interface = Drag_Control()
+    
     drag_interface.run()
+
     show_possible_velocity(drag_interface.velocity_candidate)
